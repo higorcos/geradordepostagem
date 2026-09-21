@@ -44,6 +44,45 @@
   .hint{font-size:12px; color:var(--muted); margin-top:8px; line-height:1.5;}
   select{background:#1a1a1a; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:13px; max-width:100%;}
 
+  .dropzone{
+    position:relative; border:1.5px dashed var(--border); border-radius:12px; background:#1a1a1a;
+    min-height:96px; display:flex; align-items:center; justify-content:center; text-align:center;
+    padding:16px; transition:border-color .15s ease, background .15s ease; overflow:hidden;
+  }
+  .dropzone.drag-over{border-color:var(--accent); background:#231d1a;}
+  .dropzone input[type="file"]{
+    position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; margin:0;
+  }
+  .dropzone-empty{display:flex; flex-direction:column; align-items:center; gap:8px; color:var(--muted); pointer-events:none;}
+  .dropzone-empty span{font-size:13px; max-width:220px; line-height:1.4;}
+  .dropzone-filled{display:flex; align-items:center; gap:12px; width:100%; pointer-events:none;}
+  .dropzone-filled img{
+    width:56px; height:56px; object-fit:cover; border-radius:8px; border:1px solid var(--border); flex-shrink:0;
+  }
+  .dropzone-filename{
+    flex:1; font-size:12px; color:var(--text); text-align:left; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; min-width:0;
+  }
+  .ghost-btn{
+    pointer-events:auto; width:auto; margin:0; padding:7px 12px; font-size:12px; font-weight:600;
+    background:transparent; color:var(--accent); border:1px solid var(--accent); border-radius:8px; cursor:pointer;
+    position:relative; z-index:2; flex-shrink:0;
+  }
+
+  .canvas-wrap{position:relative;}
+  .fs-btn{
+    position:absolute; top:10px; right:10px; width:36px; height:36px; margin:0; padding:0;
+    display:flex; align-items:center; justify-content:center; border-radius:8px;
+    background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.25); backdrop-filter:blur(2px);
+  }
+  .canvas-wrap:fullscreen{
+    display:flex; align-items:center; justify-content:center; background:#000; width:100vw; height:100vh;
+  }
+  .canvas-wrap:fullscreen canvas{
+    width:auto; height:auto; max-width:100vw; max-height:100vh; border-radius:0; border:none;
+  }
+  .canvas-wrap:fullscreen .fs-btn{top:20px; right:20px;}
+
   /* wider screens: two columns, controls on the left, sticky preview on the right */
   @media (min-width: 860px){
     .wrap{max-width:960px; display:grid; grid-template-columns:380px 1fr; gap:20px; align-items:start;}
@@ -65,11 +104,22 @@
   <div class="panel controls-panel">
     <div class="field">
       <label>Foto</label>
-      <input type="file" id="photo" accept="image/*">
+      <div id="dropzone" class="dropzone">
+        <input type="file" id="photo" accept="image/*">
+        <div id="dropzoneEmpty" class="dropzone-empty">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          <span>Clique ou arraste uma foto aqui</span>
+        </div>
+        <div id="dropzoneFilled" class="dropzone-filled" style="display:none;">
+          <img id="thumbPreview" alt="Prévia da foto">
+          <div class="dropzone-filename" id="fileNameLabel"></div>
+          <button type="button" id="changePhoto" class="ghost-btn">Trocar foto</button>
+        </div>
+      </div>
     </div>
     <div class="field">
       <label>Manchete</label>
-      <textarea id="headline" placeholder="Ex: Imperatriz ultrapassa R$ 105 milhões em arrecadação de impostos municipais em 2026">O santinho mal chegou e já recebeu o destino final!</textarea>
+      <textarea id="headline" placeholder="Ex: Imperatriz ultrapassa R$ 105 milhões em arrecadação de impostos municipais em 2026"></textarea>
     </div>
     <div class="row">
       <div class="field">
@@ -83,8 +133,8 @@
       <div class="field">
         <label>Formato</label>
         <select id="ratio">
-          <option value="1080x1350">Feed (4:5)</option>
-          <option value="1080x1920" selected>Stories/Reels (9:16)</option>
+          <option value="1080x1350" selected>Feed (4:5)</option>
+          <option value="1080x1920">Stories/Reels (9:16)</option>
           <option value="1080x1080">Quadrado (1:1)</option>
         </select>
       </div>
@@ -125,7 +175,12 @@
   </div>
 
   <div class="panel preview-panel">
-    <canvas id="canvas"></canvas>
+    <div id="canvasWrap" class="canvas-wrap">
+      <canvas id="canvas"></canvas>
+      <button type="button" id="fullscreenBtn" class="fs-btn" title="Ver em tela cheia">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      </button>
+    </div>
     <button id="download">Baixar imagem</button>
     <p class="hint">O texto se ajusta automaticamente ao tamanho da caixa. Troque a posição para "Em cima" ou "No meio" se a foto tiver o assunto principal na parte de baixo.</p>
   </div>
@@ -137,6 +192,14 @@ const ctx = canvas.getContext('2d');
 let img = null;
 
 const photoInput = document.getElementById('photo');
+const dropzone = document.getElementById('dropzone');
+const dropzoneEmpty = document.getElementById('dropzoneEmpty');
+const dropzoneFilled = document.getElementById('dropzoneFilled');
+const thumbPreview = document.getElementById('thumbPreview');
+const fileNameLabel = document.getElementById('fileNameLabel');
+const changePhotoBtn = document.getElementById('changePhoto');
+const canvasWrap = document.getElementById('canvasWrap');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
 const headlineInput = document.getElementById('headline');
 const positionSelect = document.getElementById('position');
 const ratioSelect = document.getElementById('ratio');
@@ -278,17 +341,73 @@ function draw(){
   }
 }
 
-photoInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if(!file) return;
+function loadPhotoFile(file){
+  if(!file || !file.type.startsWith('image/')) return;
   const reader = new FileReader();
   reader.onload = (ev) => {
     const image = new Image();
-    image.onload = () => { img = image; draw(); };
+    image.onload = () => {
+      img = image;
+      thumbPreview.src = ev.target.result;
+      fileNameLabel.textContent = file.name;
+      dropzoneEmpty.style.display = 'none';
+      dropzoneFilled.style.display = 'flex';
+      draw();
+    };
     image.src = ev.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+photoInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(file) loadPhotoFile(file);
 });
+
+changePhotoBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  photoInput.click();
+});
+
+['dragenter','dragover'].forEach(evt => {
+  dropzone.addEventListener(evt, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    dropzone.classList.add('drag-over');
+  });
+});
+['dragleave','drop'].forEach(evt => {
+  dropzone.addEventListener(evt, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    dropzone.classList.remove('drag-over');
+  });
+});
+dropzone.addEventListener('drop', (e) => {
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(file) loadPhotoFile(file);
+});
+
+function isFullscreen(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+fullscreenBtn.addEventListener('click', () => {
+  if(!isFullscreen()){
+    if(canvasWrap.requestFullscreen) canvasWrap.requestFullscreen();
+    else if(canvasWrap.webkitRequestFullscreen) canvasWrap.webkitRequestFullscreen();
+  } else {
+    if(document.exitFullscreen) document.exitFullscreen();
+    else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }
+});
+
+function updateFsIcon(){
+  fullscreenBtn.innerHTML = isFullscreen()
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v3a2 2 0 0 1-2 2H4M15 3v3a2 2 0 0 0 2 2h3M9 21v-3a2 2 0 0 0-2-2H4M15 21v-3a2 2 0 0 1 2-2h3"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+  fullscreenBtn.title = isFullscreen() ? 'Sair da tela cheia' : 'Ver em tela cheia';
+}
+document.addEventListener('fullscreenchange', updateFsIcon);
+document.addEventListener('webkitfullscreenchange', updateFsIcon);
 
 [headlineInput, positionSelect, ratioSelect, textColorInput, boxColorInput, textScaleInput, boxOpacityInput, boxPaddingInput, boxWidthInput].forEach(el => {
   el.addEventListener('input', draw);
